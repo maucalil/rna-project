@@ -31,7 +31,6 @@ def main():
 
     # Get the best model trained
     best_mlp = grid_search.best_estimator_
-    print(best_mlp)
 
     # Test the model using cross validation
     y_pred = cross_val_predict(best_mlp, X, y, cv=5)
