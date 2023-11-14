@@ -1,87 +1,78 @@
 import pandas as pd
 import matplotlib.pyplot as plt
 from sklearn.metrics  import accuracy_score, confusion_matrix, ConfusionMatrixDisplay
-from sklearn.model_selection import train_test_split
+from sklearn.model_selection import GridSearchCV, cross_val_predict
 from sklearn.neural_network import MLPClassifier
 from sklearn.preprocessing import MinMaxScaler
 
 def main():
     # Load data from file
     data_df = load_data("data.csv")
-    class_labels = data_df["class"].unique()
 
     # Normalize data
     normalized_data_df = normalize_data(data_df)
 
-    # Get train and test sets
-    X_train, X_test, y_train, y_test = split_data(normalized_data_df)
+    # Extract features and target variable
+    X = normalized_data_df.drop(["class"], axis=1) # features
+    y = normalized_data_df["class"] # targets
+    class_labels = y.unique()
 
-    configs = get_configs()
-    print(configs)
+    # Create the model
+    mlp = MLPClassifier()
 
-    for i, config in enumerate(configs):
-        print(f"== Model {i + 1}")
-        # Create the model
-        mlp = MLPClassifier(**config)
+    # Use GridSearchCV to find the best configuration
+    param_grid = get_parameters_grid()
+    grid_search = GridSearchCV(mlp, param_grid, cv=5)
+    grid_search.fit(X, y)
 
-        # Train the model
-        mlp.fit(X_train, y_train)
+    # Get the best configuration
+    best_config = grid_search.best_params_
+    print(f"Best Model Configuration: {best_config}")
 
-        # Test the model
-        y_pred = mlp.predict(X_test)
+    # Get the best model trained
+    best_mlp = grid_search.best_estimator_
+    print(best_mlp)
 
-        # Model metrics
-        accuracy = accuracy_score(y_test, y_pred)
-        print(f"  Accuracy: {accuracy}")
-        cm = confusion_matrix(y_test, y_pred, labels=class_labels)
-        disp = ConfusionMatrixDisplay(confusion_matrix=cm, display_labels=class_labels)
-        disp.plot()
-        plt.show()
+    # Test the model using cross validation
+    y_pred = cross_val_predict(best_mlp, X, y, cv=5)
 
+    # Model metrics
+    accuracy = accuracy_score(y, y_pred)
+    print(f"Accuracy: {accuracy}")
+
+    # Confusion matrix
+    cm = confusion_matrix(y, y_pred, labels=class_labels)
+    disp = ConfusionMatrixDisplay(confusion_matrix=cm, display_labels=class_labels)
+    disp.plot()
+    plt.show()
+
+# Loads data from a CSV file into a Pandas DataFrame.
 def load_data(file_path):
     df = pd.read_csv(file_path)
     return df
 
+# Normalizes features using Min-Max scaling
 def normalize_data(data: pd.DataFrame, range=(-1, 1)):
     features = data.drop(["audio_name", "class"], axis=1)
     scaler = MinMaxScaler(range)
     normalized_features = scaler.fit_transform(features)
+
+    # Create a new DataFrame with normalized features and the target variable
     data_normalized = pd.DataFrame(data=normalized_features, columns=features.columns)
     data_normalized["class"] = data["class"]
     return data_normalized
 
-def split_data(data, test_size=0.33, seed=42):
-    X = data.drop(["class"], axis=1)
-    y = data["class"]
-    X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=test_size, random_state=seed)
-    return X_train, X_test, y_train, y_test
-
-def get_configs():
-    default = {
-        "random_state": 42,
-        "max_iter": 1000,
-        "solver": "adam"
+# Define a grid of hyperparameters for the MLP model to get the best one
+def get_parameters_grid():
+    return {
+        'hidden_layer_sizes': [(14), (14, 7), (128), (128, 64)],
+        'activation': ['identity', 'logistic', 'tanh', 'relu'],
+        'max_iter': [10000],
+        'solver': ['sgd', 'adam'],
+        'random_state': [42],
+        'learning_rate': ['constant', 'invscaling', 'adaptive'],
+        'learning_rate_init': [0.001, 0.01, 0.1]
     }
-    # Define a configuração do MLP
-    mlp_config_0 = {
-        "hidden_layer_sizes": (128, 64),
-        "activation": "relu",
-        **default
-    }
-
-    mlp_config_1 = {
-        "hidden_layer_sizes": (128, 64),
-        "activation": "tanh",
-        **default
-    }
-
-    mlp_config_2 = {
-        "hidden_layer_sizes": (128, 64, 32),
-        "activation": "relu",
-        **default
-    }
-
-    return [mlp_config_0, mlp_config_1, mlp_config_2]
 
 if __name__ == "__main__":
     main()
